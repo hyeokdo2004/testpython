@@ -1,38 +1,38 @@
-name: Koref Crawl
+name: Run koref crawler
 
 on:
+  # 1️⃣ 수동 실행 (GitHub Pages의 Start 버튼 → workflow_dispatch)
   workflow_dispatch:
+
+  # 2️⃣ 매주 월요일 00:00 자동 실행 (UTC 기준 15:00이 한국시간 00:00)
   schedule:
-    # 예: 매일 03:00 KST -> UTC 18:00 (adjust as needed)
-    - cron: '0 18 * * *'
+    - cron: "0 15 * * 0"
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install playwright
-          # Install chromium for Playwright
           playwright install --with-deps chromium
 
       - name: Run crawler
         run: |
-          python crawl_playwright.py
+          python git.py
 
-      - name: Commit status and results
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add status.json result_urls.json || true
-          git commit -m "Update crawl results: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" || echo "no changes"
-          git push
+      - name: Upload result file
+        uses: actions/upload-artifact@v4
+        with:
+          name: result_urls
+          path: result_urls.json
