@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>KOREA Foundation Scraper</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; margin-top: 100px; }
+    .progress-bar { width: 60%; margin: 20px auto; background: #ddd; border-radius: 20px; overflow: hidden; }
+    .progress { height: 30px; background: #4caf50; width: 0%; transition: width 0.5s; }
+    button { display: none; margin-top: 20px; padding: 10px 20px; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <h2>데이터 수집 진행률</h2>
+  <div class="progress-bar">
+    <div class="progress" id="progress"></div>
+  </div>
+  <p id="status-text">진행 중...</p>
+  <button id="result-btn" onclick="window.location.href='result.html'">확인</button>
+
+  <script>
+    async function updateProgress() {
+      try {
+        const res = await fetch('status.json?_=' + Date.now());
+        const data = await res.json();
+        document.getElementById("progress").style.width = data.progress + "%";
+        document.getElementById("status-text").textContent = data.done 
+          ? "✅ 수집 완료!" 
+          : `📁 현재 게시판: ${data.current_board}, 진행률: ${data.progress}%`;
+
+        if (data.done) document.getElementById("result-btn").style.display = 'inline-block';
+      } catch (e) {
+        document.getElementById("status-text").textContent = "상태 확인 중...";
+      }
+    }
+
+    setInterval(updateProgress, 2000);
+    updateProgress();
+  </script>
+</body>
+</html>
