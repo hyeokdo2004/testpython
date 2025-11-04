@@ -1,41 +1,67 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>KOREA Foundation Scraper</title>
+  <meta charset="utf-8">
+  <title>Koref Crawler Dashboard</title>
   <style>
-    body { font-family: sans-serif; text-align: center; margin-top: 100px; }
-    .progress-bar { width: 60%; margin: 20px auto; background: #ddd; border-radius: 20px; overflow: hidden; }
-    .progress { height: 30px; background: #4caf50; width: 0%; transition: width 0.5s; }
-    button { display: none; margin-top: 20px; padding: 10px 20px; font-size: 16px; }
+    body{font-family:Arial,Helvetica,sans-serif;text-align:center;padding:40px}
+    .progress-bar{width:60%;margin:20px auto;background:#eee;border-radius:12px;height:28px;overflow:hidden;display:none}
+    .progress{height:100%;background:#4caf50;width:0;transition:width .5s}
+    button{padding:10px 18px;font-size:16px;margin:6px}
   </style>
 </head>
 <body>
-  <h2>데이터 수집 진행률</h2>
-  <div class="progress-bar">
-    <div class="progress" id="progress"></div>
-  </div>
-  <p id="status-text">진행 중...</p>
-  <button id="result-btn" onclick="window.location.href='result.html'">확인</button>
+  <h1>Koref Crawler</h1>
+  <p>Start 버튼을 누르면 GitHub Actions에서 크롤러를 실행할 수 있습니다.</p>
+
+  <button id="start">Start (Open workflow run page)</button>
+  <div class="progress-bar" id="bar"><div class="progress" id="barInner"></div></div>
+  <p id="status">대기 중</p>
+  <button id="view" style="display:none" onclick="location.href='result.html'">확인</button>
 
   <script>
-    async function updateProgress() {
+    const startBtn = document.getElementById('start');
+    const bar = document.getElementById('bar');
+    const barInner = document.getElementById('barInner');
+    const status = document.getElementById('status');
+    const viewBtn = document.getElementById('view');
+
+    // Replace with your repo owner/name and workflow file name
+    const OWNER = 'YOUR_GITHUB_USERNAME_OR_ORG';
+    const REPO = 'YOUR_REPOSITORY_NAME';
+    const WORKFLOW_FILENAME = 'crawl.yml'; // workflow file under .github/workflows
+
+    startBtn.addEventListener('click', () => {
+      // We cannot safely trigger workflow from client without token.
+      // So open the GitHub Actions workflow run UI so user can press "Run workflow".
+      const url = `https://github.com/${OWNER}/${REPO}/actions/workflows/${WORKFLOW_FILENAME}`;
+      window.open(url, '_blank');
+      // Show polling UI anyway (in case user runs manually)
+      bar.style.display = 'block';
+      poll();
+    });
+
+    async function poll() {
       try {
         const res = await fetch('status.json?_=' + Date.now());
-        const data = await res.json();
-        document.getElementById("progress").style.width = data.progress + "%";
-        document.getElementById("status-text").textContent = data.done 
-          ? "✅ 수집 완료!" 
-          : `📁 현재 게시판: ${data.current_board}, 진행률: ${data.progress}%`;
-
-        if (data.done) document.getElementById("result-btn").style.display = 'inline-block';
+        if (!res.ok) throw 'no status';
+        const st = await res.json();
+        barInner.style.width = st.progress + '%';
+        status.textContent = st.done ? '✅ 수집 완료' : `진행 중: ${st.current_board || ''} ${st.progress}%`;
+        if (st.done) {
+          viewBtn.style.display = 'inline-block';
+        } else {
+          setTimeout(poll, 2000);
+        }
       } catch (e) {
-        document.getElementById("status-text").textContent = "상태 확인 중...";
+        // no status.json yet
+        status.textContent = '상태 대기 중... (Actions 실행 후 자동 갱신)';
+        setTimeout(poll, 4000);
       }
     }
 
-    setInterval(updateProgress, 2000);
-    updateProgress();
+    // initial poll
+    poll();
   </script>
 </body>
 </html>
