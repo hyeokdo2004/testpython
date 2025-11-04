@@ -4,10 +4,32 @@
   <meta charset="utf-8">
   <title>Koref Crawler Dashboard</title>
   <style>
-    body{font-family:Arial,Helvetica,sans-serif;text-align:center;padding:40px}
-    .progress-bar{width:60%;margin:20px auto;background:#eee;border-radius:12px;height:28px;overflow:hidden;display:none}
-    .progress{height:100%;background:#4caf50;width:0;transition:width .5s}
-    button{padding:10px 18px;font-size:16px;margin:6px}
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      text-align: center;
+      padding: 40px;
+    }
+    .progress-bar {
+      width: 60%;
+      margin: 20px auto;
+      background: #eee;
+      border-radius: 12px;
+      height: 28px;
+      overflow: hidden;
+      display: none;
+    }
+    .progress {
+      height: 100%;
+      background: #4caf50;
+      width: 0;
+      transition: width .5s;
+    }
+    button {
+      padding: 10px 18px;
+      font-size: 16px;
+      margin: 6px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -26,41 +48,47 @@
     const status = document.getElementById('status');
     const viewBtn = document.getElementById('view');
 
-    // Replace with your repo owner/name and workflow file name
-    const OWNER = 'YOUR_GITHUB_USERNAME_OR_ORG';
-    const REPO = 'YOUR_REPOSITORY_NAME';
+    // ✅ 실제 GitHub 사용자명 / 저장소명으로 교체됨
+    const OWNER = 'hyeokdo2004';
+    const REPO = 'testpython';
     const WORKFLOW_FILENAME = 'crawl.yml'; // workflow file under .github/workflows
 
     startBtn.addEventListener('click', () => {
-      // We cannot safely trigger workflow from client without token.
-      // So open the GitHub Actions workflow run UI so user can press "Run workflow".
+      // 👉 GitHub Actions workflow 페이지를 새 탭으로 염
       const url = `https://github.com/${OWNER}/${REPO}/actions/workflows/${WORKFLOW_FILENAME}`;
       window.open(url, '_blank');
-      // Show polling UI anyway (in case user runs manually)
+
+      // 진행률 바 표시 시작
       bar.style.display = 'block';
       poll();
     });
 
+    // 진행 상태(status.json)를 주기적으로 확인
     async function poll() {
       try {
         const res = await fetch('status.json?_=' + Date.now());
         if (!res.ok) throw 'no status';
         const st = await res.json();
+
+        // 진행률 바 업데이트
         barInner.style.width = st.progress + '%';
-        status.textContent = st.done ? '✅ 수집 완료' : `진행 중: ${st.current_board || ''} ${st.progress}%`;
+        status.textContent = st.done
+          ? '✅ 수집 완료'
+          : `진행 중: ${st.current_board || ''} ${st.progress}%`;
+
         if (st.done) {
           viewBtn.style.display = 'inline-block';
         } else {
           setTimeout(poll, 2000);
         }
       } catch (e) {
-        // no status.json yet
+        // status.json이 아직 생성되지 않으면 재시도
         status.textContent = '상태 대기 중... (Actions 실행 후 자동 갱신)';
         setTimeout(poll, 4000);
       }
     }
 
-    // initial poll
+    // 페이지 진입 시 상태 확인
     poll();
   </script>
 </body>
