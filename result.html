@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>수집된 게시물 목록</title>
+</head>
+<body>
+  <h2>📋 수집된 게시물 목록</h2>
+  <ul id="url-list"></ul>
+
+  <script>
+    async function loadResults() {
+      const res = await fetch('result_urls.json');
+      const urls = await res.json();
+      const ul = document.getElementById('url-list');
+      urls.forEach(u => {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = u;
+        a.textContent = u;
+        a.target = '_blank';
+        li.appendChild(a);
+        ul.appendChild(li);
+      });
+    }
+    loadResults();
+  </script>
+</body>
+</html>
