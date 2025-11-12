@@ -2,33 +2,33 @@ name: Koref Crawler
 
 on:
   workflow_dispatch:        # 수동 실행 (Start 버튼 클릭 시)
-  schedule:                 # 매주 월요일 00시 자동 실행
-    - cron: '0 15 * * 0'    # UTC 기준 15시는 한국시간 00시
+  schedule:                 # 매주 월요일 00시 자동 실행 (UTC 기준 15시는 한국 00시)
+    - cron: '0 15 * * 0'
 
 jobs:
   run-crawler:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
+    - name: ✅ Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Python
+    - name: 🐍 Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
-    - name: Install dependencies
+    - name: 📦 Install dependencies (Playwright + Chromium)
       run: |
         python -m pip install --upgrade pip
         pip install playwright
         playwright install --with-deps chromium
 
-    - name: Run crawler
+    - name: 🚀 Run crawler
       run: |
         python crawler.py
 
-    - name: Upload crawl result
+    - name: 📤 Upload crawl result (result_urls.json)
       uses: actions/upload-artifact@v4
       with:
         name: result-urls
