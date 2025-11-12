@@ -1,35 +1,35 @@
 name: Koref Crawler
 
+# 워크플로우 트리거
 on:
-  workflow_dispatch:  # 수동 실행 (Start 버튼 클릭 시)
+  # 매주 월요일 00:00 KST 자동 실행
   schedule:
-    - cron: '0 15 * * 0'  # 한국시간 월요일 00시 (UTC 15시)
+    - cron: '0 15 * * 0'  # GitHub Actions는 UTC 기준, KST +9
+  # 수동 실행 가능
+  workflow_dispatch:
 
 jobs:
-  crawl:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+    # 저장소 코드 체크아웃
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+    # Python 환경 세팅
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
 
-      - name: Install dependencies
-        run: |
-          pip install requests beautifulsoup4
+    # 필요 패키지 설치
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install playwright
+        playwright install
 
-      - name: Run crawler
-        run: |
-          python crawler.py
-
-      - name: Commit and push results
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add result_urls.json status.json || true
-          git commit -m "Auto update results [skip ci]" || echo "No changes"
-          git push
+    # 크롤러 실행
+    - name: Run Python crawler
+      run: python crawler.py
