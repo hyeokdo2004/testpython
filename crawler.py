@@ -1,136 +1,83 @@
-# crawl_playwright.py
 import asyncio
+from playwright.async_api import async_playwright
+import re
 import json
 import os
-import re
-import time
-from datetime import datetime
-from playwright.async_api import async_playwright
 
-# 리스트 대상 board_id
+# 수집 대상 게시판
 BOARD_IDS = [27, 49, 28, 29, 30, 50, 51, 52, 39, 37, 32]
-
+BASE_LIST_URL = "https://www.koref.or.kr/web/board/boardContentsListPage.do?board_id={bid}&miv_pageNo={page}"
+BASE_DETAIL_URL = "https://www.koref.or.kr/web/board/boardContentsView.do?board_id={bid}&contents_id={contents_id}"
 BASE_DOMAIN = "https://www.koref.or.kr"
-LIST_TPL = BASE_DOMAIN + "/web/board/boardContentsListPage.do?board_id={}&miv_pageNo={}"
-DETAIL_TPL = BASE_DOMAIN + "/web/board/boardContentsView.do?board_id={}&contents_id={}"
-RE_CONTENTS = re.compile(r"contentsView\(['\"]?([0-9a-fA-F]+)['\"]?\)")
 
-STATUS_FILE = "status.json"
-RESULT_FILE = "result_urls.json"
+# 수집 결과를 담을 리스트
+collected_urls = []
 
-async def update_status(progress, board_id=None, done=False):
-    st = {"progress": int(progress), "current_board": board_id, "done": bool(done)}
-    with open(STATUS_FILE, "w", encoding="utf-8") as f:
-        json.dump(st, f, ensure_ascii=False, indent=2)
+async def crawl_board(board_id, page):
+    print("\n" + "="*30)
+    print(f"📁 게시판 board_id={board_id} 시작")
+    print("="*30)
 
-async def run_crawl():
-    results = []
-    total_boards = len(BOARD_IDS)
-    await update_status(0, None, False)
+    # 마지막 페이지 확인
+    await page.goto(BASE_LIST_URL.format(bid=board_id, page=1), timeout=0)
+    await page.wait_for_load_state("networkidle")
+    html = await page.content()
 
+    match = re.search(r'go_Page\((\d+)\)[^>]*>\s*<img[^>]+alt="맨뒤로"', html)
+    max_page = int(match.group(1)) if match else 1
+    print(f"[INFO] 마지막 페이지 번호: {max_page}")
+
+    # 페이지 순회
+    for p in range(1, max_page + 1):
+        list_url = BASE_LIST_URL.format(bid=board_id, page=p)
+        print(f"\n--- 📄 페이지 {p} → {list_url} ---")
+        await page.goto(list_url, timeout=0)
+        await page.wait_for_load_state("networkidle")
+
+        anchors = await page.query_selector_all("a[href^='javascript:contentsView']")
+        if not anchors:
+            print(f"⚠️ {p} 페이지에서 게시물 링크를 찾지 못함")
+            continue
+
+        for a in anchors:
+            href = await a.get_attribute("href") or ""
+            match = re.search(r"contentsView\(['\"]?([0-9a-fA-F]+)['\"]?\)", href)
+            if not match:
+                continue
+
+            contents_id = match.group(1)
+            detail_url = BASE_DETAIL_URL.format(bid=board_id, contents_id=contents_id)
+            print(f"  📰 게시물 URL: {detail_url}")
+            collected_urls.append(detail_url)
+
+            # 상세 페이지 접속
+            await page.goto(detail_url, timeout=0)
+            await page.wait_for_load_state("networkidle")
+
+            # 첨부파일 링크 추출
+            attach_links = await page.query_selector_all("dd.vdd.file a[href*='fileidDownLoad']")
+            for link in attach_links:
+                file_href = await link.get_attribute("href") or ""
+                file_url = BASE_DOMAIN + file_href if file_href.startswith("/") else file_href
+                print(f"     └── 📎 첨부파일: {file_url}")
+                collected_urls.append(file_url)
+
+async def main():
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
-        context = await browser.new_context()
-        page = await context.new_page()
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
 
-        try:
-            for idx, board_id in enumerate(BOARD_IDS, start=1):
-                await update_status(int((idx-1)/total_boards*100), board_id, False)
-                print(f"== board_id={board_id} ==")
+        for bid in BOARD_IDS:
+            await crawl_board(bid, page)
 
-                # 첫 페이지 열기
-                await page.goto(LIST_TPL.format(board_id, 1), timeout=60000)
-                await page.wait_for_load_state("networkidle")
-                # '맨뒤로' 이미지 -> 부모 a의 href에서 go_Page(n) 파싱
-                last_page = 1
-                try:
-                    last_img = await page.query_selector("img[alt='맨뒤로']")
-                    if last_img:
-                        parent = await last_img.evaluate_handle("n => n.closest('a')")
-                        href = await parent.get_attribute("href")
-                        if href:
-                            m = re.search(r"go_Page\((\d+)\)", href)
-                            if m:
-                                last_page = int(m.group(1))
-                except Exception as e:
-                    print("last page detect fail:", e)
-                    last_page = 1
+        await browser.close()
 
-                print("last_page:", last_page)
+    # 결과를 docs 폴더에 저장
+    os.makedirs("docs", exist_ok=True)
+    with open("docs/result_urls.json", "w", encoding="utf-8") as f:
+        json.dump(collected_urls, f, ensure_ascii=False, indent=2)
 
-                # 페이지 순회
-                for pno in range(1, last_page + 1):
-                    list_url = LIST_TPL.format(board_id, pno)
-                    print("page:", list_url)
-                    # 페이지 이동: go_Page 사용 (사이트 동작 방식)
-                    if pno == 1:
-                        await page.goto(list_url, timeout=60000)
-                    else:
-                        try:
-                            await page.evaluate(f"go_Page({pno})")
-                        except Exception:
-                            await page.goto(list_url, timeout=60000)
-                    await page.wait_for_load_state("networkidle")
-                    await asyncio.sleep(0.2)
-
-                    # 모든 <a>의 href/onlick을 문자열로 미리 수집
-                    link_vals = await page.eval_on_selector_all(
-                        "a",
-                        "els => els.map(a => ({href: a.getAttribute('href')||'', onclick: a.getAttribute('onclick')||'', text: (a.innerText||'').trim()}))"
-                    )
-
-                    # 게시물 식별
-                    for it in link_vals:
-                        joined = (it.get("href","") or "") + " " + (it.get("onclick","") or "")
-                        m = RE_CONTENTS.search(joined)
-                        if not m:
-                            continue
-                        contents_id = m.group(1)
-                        detail_url = DETAIL_TPL.format(board_id, contents_id)
-                        print("POST:", detail_url)
-                        results.append(detail_url)
-
-                        # 상세페이지에서 첨부파일 추출
-                        detail_page = await context.new_page()
-                        try:
-                            await detail_page.goto(detail_url, timeout=60000)
-                            await detail_page.wait_for_load_state("networkidle")
-                            file_links = await detail_page.eval_on_selector_all(
-                                "dd.vdd.file a[href*='fileidDownLoad'], a[href*='fileidDownLoad']",
-                                "els => els.map(a => a.getAttribute('href'))"
-                            )
-                            for fh in file_links:
-                                if not fh:
-                                    continue
-                                full = fh if fh.startswith("http") else (BASE_DOMAIN + fh)
-                                print("  FILE:", full)
-                                results.append(full)  # optional: include file links in results
-                        except Exception as e:
-                            print(" detail page error:", e)
-                        finally:
-                            try:
-                                await detail_page.close()
-                            except:
-                                pass
-
-                # board done -> update progress
-                await update_status(int(idx/total_boards*100), board_id, False)
-
-        finally:
-            await context.close()
-            await browser.close()
-
-    # 완료
-    await update_status(100, None, True)
-    # 결과 파일 저장 (중복 제거)
-    uniq = []
-    for u in results:
-        if u not in uniq:
-            uniq.append(u)
-    with open(RESULT_FILE, "w", encoding="utf-8") as f:
-        json.dump(uniq, f, ensure_ascii=False, indent=2)
-
-    print("Crawl done. results:", len(uniq))
+    print(f"\n✅ 전체 수집 완료! 총 {len(collected_urls)}개 URL이 docs/result_urls.json에 저장됨.")
 
 if __name__ == "__main__":
-    asyncio.run(run_crawl())
+    asyncio.run(main())
