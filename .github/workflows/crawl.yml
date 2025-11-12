@@ -1,36 +1,45 @@
 name: Run Python Crawler
 
+# 수동 실행 + 매주 월요일 자정 자동 실행
 on:
-  workflow_dispatch:      # 수동 실행 (Start 버튼 클릭 시)
+  workflow_dispatch:
   schedule:
-    - cron: "0 0 * * *"   # 매일 자정(00시) 자동 실행
+    - cron: "0 0 * * 1"  # 매주 월요일 00:00
 
+# GitHub Pages에 push 권한 필요
 permissions:
-  contents: write         # GitHub Pages에 결과를 push하기 위해 필요
+  contents: write
 
 jobs:
   run-crawler:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. 리포지토리 checkout
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2. Python 설치
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
+      # 3. 패키지 설치
       - name: Install dependencies
         run: |
           pip install playwright
-          playwright install --with-deps chromium
+          playwright install
 
+      # 4. 크롤러 실행
       - name: Run crawler
         run: |
           python crawler.py
 
-      - name: Commit and push results
+      # 5. 결과를 GitHub Pages에 반영
+      - name: Commit and push results to GitHub Pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
