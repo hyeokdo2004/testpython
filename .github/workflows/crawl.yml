@@ -1,48 +1,33 @@
-name: Run Python Crawler
+name: Crawl and Update
 
-# 수동 실행 + 매주 월요일 자정 자동 실행
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 0 * * 1"  # 매주 월요일 00:00
-
-# GitHub Pages에 push 권한 필요
-permissions:
-  contents: write
+    - cron: "0 9 * * *"
 
 jobs:
-  run-crawler:
+  crawl:
     runs-on: ubuntu-latest
-
     steps:
-      # 1. 리포지토리 checkout
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      # 2. Python 설치
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      # 3. 패키지 설치
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
-          pip install playwright
-          playwright install
+          pip install requests beautifulsoup4
 
-      # 4. 크롤러 실행
       - name: Run crawler
-        run: |
-          python crawler.py
+        run: python crawler.py
 
-      # 5. 결과를 GitHub Pages에 반영
-      - name: Commit and push results to GitHub Pages
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit and push results
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/result_urls.json
-          git commit -m "Update result URLs [skip ci]" || echo "No changes to commit"
+          git add docs/collected_urls.txt
+          git commit -m "Update collected URLs [skip ci]" || echo "No changes to commit"
           git push
