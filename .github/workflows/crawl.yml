@@ -1,33 +1,47 @@
-name: Crawl and Update
+name: Run Crawler
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: "0 9 * * *"
+    - cron: "0 18 * * *"  # 매일 한국시간 오전 3시에 실행 (UTC+9 기준)
+  workflow_dispatch:       # 수동 실행도 가능하게 함
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repo
+      # 1️⃣ 리포지토리 체크아웃
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      # 2️⃣ Python 환경 설정
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
-      - name: Install Python dependencies
+      # 3️⃣ 필요한 라이브러리 설치
+      - name: Install dependencies
         run: |
-          pip install requests beautifulsoup4
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4 lxml
 
+      # 4️⃣ 크롤러 실행
       - name: Run crawler
-        run: python crawler.py
-
-      - name: Commit and push results
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/collected_urls.txt
-          git commit -m "Update collected URLs [skip ci]" || echo "No changes to commit"
-          git push
+          python crawler.py
+
+      # 5️⃣ 결과물 확인 및 커밋 준비
+      - name: Commit results
+        run: |
+          mkdir -p docs
+          if [ -f collected_urls.txt ]; then
+            mv collected_urls.txt docs/collected_urls.txt
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git add docs/collected_urls.txt
+            git commit -m "🕷️ Auto-update collected URLs [$(date '+%Y-%m-%d %H:%M:%S')]"
+            git push
+          else
+            echo "⚠️ collected_urls.txt 파일이 없습니다. 크롤링에 실패했을 수 있습니다."
+          fi
