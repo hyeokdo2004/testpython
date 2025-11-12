@@ -1,12 +1,12 @@
 name: Run Python Crawler
 
 on:
-  workflow_dispatch:       # 👉 수동 실행 (Actions 탭 → Run workflow 버튼)
+  workflow_dispatch:      # 수동 실행 (Start 버튼 클릭 시)
   schedule:
-    - cron: "0 0 * * *"    # 👉 매일 자정 자동 실행 (UTC 기준)
+    - cron: "0 0 * * *"   # 매일 자정(00시) 자동 실행
 
 permissions:
-  contents: write           # 👉 git push 권한 부여 (없으면 403 에러)
+  contents: write         # GitHub Pages에 결과를 push하기 위해 필요
 
 jobs:
   run-crawler:
@@ -23,7 +23,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install playwright
+          playwright install --with-deps chromium
 
       - name: Run crawler
         run: |
