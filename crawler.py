@@ -1,3 +1,4 @@
+# crawler.py
 import asyncio
 from playwright.async_api import async_playwright
 import re
@@ -10,10 +11,9 @@ LIST_TPL = BASE_DOMAIN + "/web/board/boardContentsListPage.do?board_id={}&miv_pa
 DETAIL_TPL = BASE_DOMAIN + "/web/board/boardContentsView.do?board_id={}&contents_id={}"
 RE_CONTENTS = re.compile(r"contentsView\(['\"]?([0-9a-fA-F]+)['\"]?\)")
 
-# ✅ 결과 저장 폴더 (GitHub Pages용)
+# ✅ GitHub Pages용 결과 저장 폴더
 OUTPUT_DIR = os.path.join(os.getcwd(), "docs")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-
 
 async def crawl_board(page, board_id: int):
     print("\n" + "=" * 30)
@@ -53,9 +53,8 @@ async def crawl_board(page, board_id: int):
                     await page.evaluate(f"go_Page({p})")
                 except Exception:
                     await page.goto(page_url, timeout=60000)
-
             await page.wait_for_load_state("networkidle")
-            await asyncio.sleep(0.4)
+            await asyncio.sleep(0.8)
         except Exception as e:
             print(f" ⚠️ 페이지 로드 오류: {e}")
             continue
@@ -74,13 +73,16 @@ async def crawl_board(page, board_id: int):
             href = item.get("href", "")
             onclick = item.get("onclick", "")
             joined = href + " " + onclick
+
             m = RE_CONTENTS.search(joined)
             if not m:
                 continue
+
             found_any = True
             contents_id = m.group(1)
             detail_url = DETAIL_TPL.format(board_id, contents_id)
             print(f" 📰 게시물 URL: {detail_url}")
+            results.append(detail_url)
 
             try:
                 detail_page = await page.context.new_page()
@@ -91,6 +93,7 @@ async def crawl_board(page, board_id: int):
                     "dd.vdd.file a[href*='fileidDownLoad'], a[href*='fileidDownLoad']",
                     "els => els.map(a => a.getAttribute('href'))"
                 )
+
                 for fh in file_links:
                     if not fh:
                         continue
@@ -122,8 +125,8 @@ async def main():
         print("\n=== 시작: 모든 board_id에 대해 수집 ===")
 
         for bid in BOARD_IDS:
-            result = await crawl_board(page, bid)
-            all_results.extend(result)
+            urls = await crawl_board(page, bid)
+            all_results.extend(urls)
 
         print("\n=== 완료 ===")
 
@@ -141,7 +144,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    # GitHub 환경에서 playwright 자동 설치
+    # ✅ GitHub Actions 환경 자동 playwright 설치
     try:
         os.system("playwright install --with-deps chromium")
     except Exception as e:
