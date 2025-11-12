@@ -4,31 +4,30 @@ from playwright.async_api import async_playwright
 import re
 import os
 
-# 게시판 ID 리스트 (원본 기준 전체)
+# 게시판 ID 리스트
 BOARD_IDS = [27, 49, 28, 29, 30, 50, 51, 52, 39, 37, 32]
 
 BASE_DOMAIN = "https://www.koref.or.kr"
 LIST_TPL = BASE_DOMAIN + "/web/board/boardContentsListPage.do?board_id={}&miv_pageNo={}"
 DETAIL_TPL = BASE_DOMAIN + "/web/board/boardContentsView.do?board_id={}&contents_id={}"
 
-# regex to extract contents_id from javascript call like contentsView('...')
+# contents_id 추출용 정규식
 RE_CONTENTS = re.compile(r"contentsView\(['\"]?([0-9a-fA-F]+)['\"]?\)")
 
-OUTPUT_DIR = "docs"
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, "collected_urls.txt")
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-collected_urls = []
+OUTPUT_FILE = os.path.join("docs", "collected_urls.txt")
+os.makedirs("docs", exist_ok=True)
 
 async def crawl_board(page, board_id: int):
     print("\n" + "="*30)
     print(f"📁 게시판 board_id={board_id} 시작")
     print("="*30)
 
+    # 첫 페이지 열기
     first_url = LIST_TPL.format(board_id, 1)
     await page.goto(first_url, timeout=60000)
     await page.wait_for_load_state("networkidle")
 
+    # 마지막 페이지 번호 확인
     last_page = 1
     try:
         last_img = await page.query_selector("img[alt='맨뒤로']")
@@ -41,24 +40,20 @@ async def crawl_board(page, board_id: int):
                     last_page = int(m.group(1))
     except Exception as e:
         print(" [WARN] 마지막 페이지 확인 중 예외:", e)
-
     print(f"[INFO] 마지막 페이지 번호: {last_page}")
 
+    # 페이지 순회
     for p in range(1, last_page + 1):
         page_url = LIST_TPL.format(board_id, p)
         print(f"\n--- 📄 페이지 {p} → {page_url}")
         await page.goto(page_url, timeout=60000)
         await page.wait_for_load_state("networkidle")
-        await asyncio.sleep(0.4)
+        await asyncio.sleep(0.3)
 
-        # 게시물 링크
+        # 게시글 링크 추출
         link_values = await page.eval_on_selector_all(
             "a",
-            """els => els.map(a => ({
-                href: a.getAttribute('href') || '',
-                onclick: a.getAttribute('onclick') || '',
-                text: (a.innerText || '').trim()
-            }))"""
+            """els => els.map(a => ({ href: a.getAttribute('href') || '', onclick: a.getAttribute('onclick') || '', text: (a.innerText || '').trim() }))"""
         )
 
         found_any = False
@@ -66,17 +61,15 @@ async def crawl_board(page, board_id: int):
             href = item.get("href", "")
             onclick = item.get("onclick", "")
             joined = href + " " + onclick
-
             m = RE_CONTENTS.search(joined)
             if not m:
                 continue
             found_any = True
             contents_id = m.group(1)
             detail_url = DETAIL_TPL.format(board_id, contents_id)
-            print(f"  📰 게시물 URL: {detail_url}")
-            collected_urls.append(detail_url)
+            print(f" 📰 게시물 URL: {detail_url}")
 
-            # 상세 페이지 첨부파일
+            # 상세 페이지에서 첨부파일 추출
             try:
                 detail_page = await page.context.new_page()
                 await detail_page.goto(detail_url, timeout=60000)
@@ -86,20 +79,24 @@ async def crawl_board(page, board_id: int):
                     "dd.vdd.file a[href*='fileidDownLoad'], a[href*='fileidDownLoad']",
                     "els => els.map(a => a.getAttribute('href'))"
                 )
+
                 for fh in file_links:
                     if not fh:
                         continue
                     full = fh if fh.startswith("http") else (BASE_DOMAIN + fh)
-                    print(f"     └── 📎 첨부파일: {full}")
-                    collected_urls.append(full)
+                    print(f" └── 📎 첨부파일: {full}")
 
                 await detail_page.close()
             except Exception as e:
-                print(f"     ⚠️ 상세페이지 접근/추출 오류: {e}")
+                print(f" ⚠️ 상세페이지 접근/추출 오류: {e}")
                 try:
                     await detail_page.close()
-                except:
+                except: 
                     pass
+
+            # URL 파일에 기록
+            with open(OUTPUT_FILE, "a", encoding="utf-8") as f:
+                f.write(detail_url + "\n")
 
         if not found_any:
             print(" ⚠️ 이 페이지에서 게시물을 찾지 못함 (렌더링 실패 가능성)")
@@ -114,12 +111,7 @@ async def main():
         for bid in BOARD_IDS:
             await crawl_board(page, bid)
         print("\n=== 완료 ===")
-
-        # 저장
-        with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-            for url in collected_urls:
-                f.write(url + "\n")
-        print(f"📝 총 {len(collected_urls)}개 URL 저장 완료 → {OUTPUT_FILE}")
+        print(f"📝 수집 완료 → {OUTPUT_FILE}")
 
         await context.close()
         await browser.close()
