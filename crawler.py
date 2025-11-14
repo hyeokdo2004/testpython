@@ -14,20 +14,28 @@ async def main():
         context = await browser.new_context()
         page = await context.new_page()
 
+        contents_ids = []
+
+        # 응답 이벤트 처리
+        async def handle_response(response):
+            if "boardContentsList.do" in response.url and response.status == 200:
+                try:
+                    data = await response.json()
+                    for item in data.get("boardList", []):
+                        cid = item.get("contents_id")
+                        if cid:
+                            contents_ids.append(cid)
+                except Exception as e:
+                    print("⚠️ JSON 파싱 실패:", e)
+
+        page.on("response", handle_response)
+
         list_url = f"{BASE_DOMAIN}/web/board/boardContentsListPage.do?board_id={BOARD_ID}"
         print(f"🔗 페이지 접속: {list_url}")
         await page.goto(list_url, timeout=60000)
 
-        # AJAX 요청이 끝날 때까지 대기
-        try:
-            response = await page.wait_for_response(lambda resp: "boardContentsList.do" in resp.url and resp.status == 200, timeout=10000)
-            json_data = await response.json()
-        except Exception as e:
-            print("⚠️ AJAX 요청/응답 실패:", e)
-            json_data = {}
-
-        board_list = json_data.get("boardList", [])
-        contents_ids = [item.get("contents_id") for item in board_list if "contents_id" in item]
+        # AJAX 로딩 시간 대기
+        await asyncio.sleep(3)
 
         # 결과 저장
         with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
