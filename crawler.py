@@ -19,16 +19,19 @@ async def main():
 
         print(f"🔗 페이지 접속: {BASE_URL}")
         await page.goto(BASE_URL, timeout=60000)
+        await page.wait_for_load_state("networkidle")
 
-        # AJAX 로딩 대기: 2초 정도 기다린 뒤, body HTML 가져오기
-        await asyncio.sleep(2)
-        html = await page.content()
+        # a 태그의 onclick 속성에서 contents_id 추출
+        elements = await page.query_selector_all("a")
+        contents_ids = []
+        for el in elements:
+            onclick = await el.get_attribute("onclick") or ""
+            m = RE_CONTENTS.search(onclick)
+            if m:
+                contents_ids.append(m.group(1))
 
-        # contents_id 추출
-        contents_ids = RE_CONTENTS.findall(html)
         print(f"✅ 총 {len(contents_ids)}개 contents_id 저장 완료 → {OUTPUT_FILE}")
 
-        # 파일에 저장
         with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
             for cid in contents_ids:
                 f.write(cid + "\n")
