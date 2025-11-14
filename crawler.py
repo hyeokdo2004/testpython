@@ -1,38 +1,12 @@
 # crawler.py
 import asyncio
 from playwright.async_api import async_playwright
-import re
 import os
 
-# 수집할 게시판 URL (첫 페이지만)
-BOARD_URLS = [
-    "https://www.koref.or.kr/web/board/boardContentsListPage.do?board_id=27"
-]
-
-# contents_id 추출용 정규식
-RE_CONTENTS = re.compile(r"contentsView\(['\"]([0-9a-fA-F]+)['\"]\)")
-
-# 결과 파일
+BASE_DOMAIN = "https://www.koref.or.kr"
+BOARD_ID = 27
 OUTPUT_FILE = os.path.join("docs", "collected_contents_ids.txt")
 os.makedirs("docs", exist_ok=True)
-
-async def crawl_board(page, url):
-    print(f"🔗 페이지 접속: {url}")
-    await page.goto(url, timeout=60000)
-    await page.wait_for_load_state("networkidle")
-    await asyncio.sleep(2)  # AJAX 렌더링 대기
-
-    # 페이지 HTML 가져오기
-    html = await page.content()
-
-    # contents_id 추출
-    ids = RE_CONTENTS.findall(html)
-    print(f"✅ 총 {len(ids)}개 contents_id 추출")
-
-    # 파일 저장
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        for cid in ids:
-            f.write(cid + "\n")
 
 async def main():
     async with async_playwright() as pw:
@@ -40,12 +14,31 @@ async def main():
         context = await browser.new_context()
         page = await context.new_page()
 
-        for url in BOARD_URLS:
-            await crawl_board(page, url)
+        list_url = f"{BASE_DOMAIN}/web/board/boardContentsListPage.do?board_id={BOARD_ID}"
+        print(f"🔗 페이지 접속: {list_url}")
+        await page.goto(list_url, timeout=60000)
+
+        # AJAX 요청이 끝날 때까지 대기
+        try:
+            response = await page.wait_for_response(lambda resp: "boardContentsList.do" in resp.url and resp.status == 200, timeout=10000)
+            json_data = await response.json()
+        except Exception as e:
+            print("⚠️ AJAX 요청/응답 실패:", e)
+            json_data = {}
+
+        board_list = json_data.get("boardList", [])
+        contents_ids = [item.get("contents_id") for item in board_list if "contents_id" in item]
+
+        # 결과 저장
+        with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+            for cid in contents_ids:
+                f.write(cid + "\n")
+
+        print(f"✅ 총 {len(contents_ids)}개 contents_id 추출")
+        print(f"✅ 결과 저장 → {OUTPUT_FILE}")
 
         await context.close()
         await browser.close()
-        print(f"✅ 결과 저장 → {OUTPUT_FILE}")
 
 if __name__ == "__main__":
     asyncio.run(main())
