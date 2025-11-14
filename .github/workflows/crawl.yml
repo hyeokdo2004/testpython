@@ -1,39 +1,34 @@
-name: Crawl KOREF Boards
+name: Crawl KOREF Board
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # 수동 실행
   schedule:
-    - cron: "0 6 * * *"  # 매일 6시 실행 예시
+    - cron: "0 6 * * *"  # 매일 6시 실행
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ 저장소 체크아웃
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Python 설치
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
-      # 3️⃣ 의존성 설치 (requests + playwright)
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests playwright
+          pip install playwright
           playwright install chromium
 
-      # 4️⃣ crawler.py 실행
       - name: Run crawler
         run: python crawler.py
 
-      # 5️⃣ 수집된 URL 업로드
-      - name: Upload collected URLs
+      - name: Upload collected contents_ids
         uses: actions/upload-artifact@v4
         with:
-          name: collected_urls
-          path: docs/collected_urls.txt
+          name: collected_contents_ids
+          path: docs/collected_contents_ids.txt
