@@ -7,25 +7,31 @@ on:
 
 jobs:
   crawl:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ 저장소 체크아웃
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      # 2️⃣ Python 설치
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
+      # 3️⃣ 의존성 설치 (requests + playwright)
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install requests playwright
+          playwright install chromium
 
+      # 4️⃣ crawler.py 실행
       - name: Run crawler
         run: python crawler.py
 
+      # 5️⃣ 수집된 URL 업로드
       - name: Upload collected URLs
         uses: actions/upload-artifact@v4
         with:
